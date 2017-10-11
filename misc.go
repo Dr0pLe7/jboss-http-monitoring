@@ -11,7 +11,6 @@ type Config struct {
 	Username string
 	Password string
 	ManagementUrl string
-	ManagementRealm string
 	Payload string
 }
 

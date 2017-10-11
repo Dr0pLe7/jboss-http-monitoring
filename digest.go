@@ -11,6 +11,7 @@ import (
 	"strings"
 	"fmt"
 	"io/ioutil"
+	"errors"
 )
 
 var (
@@ -28,9 +29,11 @@ func md5sum(bytes []byte) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func getAuthResponse(method string, url string, realm string, username string, password string, nonce string) string {
+func getAuthResponse(method string, url string, realm string, username string, password string, nonce string) (string, error){
 	uri, err := parseUri(url)
-	checkError(err)
+	if err != nil {
+		return "", err
+	}
 
 	var ha1Buffer, ha2Buffer, responseBuffer bytes.Buffer
 
@@ -56,7 +59,7 @@ func getAuthResponse(method string, url string, realm string, username string, p
 	responseBuffer.WriteString(":")
 	responseBuffer.WriteString(ha2)
 
-	return md5sum(responseBuffer.Bytes())
+	return md5sum(responseBuffer.Bytes()), nil
 }
 
 func parseHeaders(headerString string) map[string]string {
@@ -92,28 +95,39 @@ func getAuthHeaders(resp http.Response) map[string]string{
 	}
 }
 
-func digestRequest(method string, url string, username string, password string, payload []byte){
+func digestRequest(method string, url string, username string, password string, payload []byte) ([]byte, error) {
 	log.Print("digestRequest")
 
 	uri, err := parseUri(url)
-	checkError(err)
+	if err != nil {
+		return nil, err
+	}
 
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(payload))
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
-	checkError(err)
+	if err != nil {
+		return nil, err
+	}
 
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusUnauthorized {
-		log.Printf("Recieved status code '%v' auth skipped", resp.StatusCode)
+		msg := fmt.Sprintf("Recieved status code '%v' auth skipped", resp.StatusCode)
+
+		return nil, errors.New(msg)
+
 	} else {
 		authHeaders := getAuthHeaders(*resp)
 
 		log.Printf("authHeaders: %#v\n", authHeaders)
 
 		// We are only going to do what we know the JBoss digest implementation to be, namely MD5/auth
-		authResponse := getAuthResponse(method, url, authHeaders["realm"], username, password, authHeaders["nonce"])
+		authResponse, err := getAuthResponse(method, url, authHeaders["realm"], username, password, authHeaders["nonce"])
+		if err != nil {
+			return nil, err
+		}
 
 		authorizationHeader := fmt.Sprintf(
 			"Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\" qop=\"auth\", ",
@@ -133,17 +147,23 @@ func digestRequest(method string, url string, username string, password string, 
 
 		client := &http.Client{}
 		resp, err := client.Do(req)
-		checkError(err)
+		if err != nil {
+			return nil, err
+		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusOK {
 			body, err := ioutil.ReadAll(resp.Body)
 
-			checkError(err)
+			if err != nil {
+				return nil, err
+			}
 
-			log.Printf("body: %#v\n", string(body))
+			return body, nil
 		} else {
 			log.Printf("Status code: %d\n", resp.StatusCode)
+
+			return nil, errors.New(fmt.Sprintf("Request failed - status code: %d", resp.StatusCode ))
 		}
 	}
 }

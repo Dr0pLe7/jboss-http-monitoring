@@ -1,0 +1,6 @@
+{
+  "Username": "jbossuser",
+  "Password": "somepassword",
+  "ManagementUrl": "http://jboss-server:9990/management",
+  "Payload": "{\"operation\":\"read-resource\", \"include-runtime\":\"true\" , \"address\":[\"subsystem\",\"web\",\"connector\",\"http\"], \"json.pretty\":1}"
+}

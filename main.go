@@ -2,8 +2,8 @@ package main
 
 import (
 	"flag"
-	"net/http"
-	"fmt"
+	"log"
+	"encoding/json"
 )
 
 var (
@@ -17,6 +17,14 @@ func main(){
 	config, err := loadConfig(*configFile)
 	checkError(err)
 
-	digestRequest("GET", config.ManagementUrl, config.Username, config.Password, []byte(config.Payload))
+	body, err := digestRequest("GET", config.ManagementUrl, config.Username, config.Password, []byte(config.Payload))
+
+	checkError(err)
+	jsonBody := make(map[string]interface{})
+
+	err = json.Unmarshal(body, &jsonBody)
+	checkError(err)
+
+	log.Printf("body: %#v\n", jsonBody)
 }
 
